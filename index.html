@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แผนที่โรงงาน อ.สันทราย</title>
+    <!-- โหลดฟอนต์ Sarabun -->
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- โหลด Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Sarabun', sans-serif; display: flex; height: 100vh; background-color: #f8f9fa; }
+        #sidebar { width: 350px; background: white; padding: 20px; box-shadow: 2px 0 5px rgba(0,0,0,0.1); z-index: 1000; overflow-y: auto; }
+        #map { flex: 1; height: 100%; z-index: 1; }
+        h2, h3, h4 { margin-top: 0; color: #333; }
+        hr { border: 0; border-top: 1px solid #ddd; margin: 15px 0; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 14px; }
+        select, input[type="text"], input[type="number"] { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; box-sizing: border-box; }
+        button { width: 100%; padding: 10px; background-color: #0d6efd; color: white; border: none; border-radius: 4px; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 10px; transition: 0.2s; }
+        button:hover { background-color: #0b5ed7; }
+        button.danger { background-color: #dc3545; }
+        button.danger:hover { background-color: #bb2d3b; }
+        .alert { padding: 10px; border-radius: 4px; margin-bottom: 10px; font-size: 14px; }
+        .alert-info { background-color: #cff4fc; color: #055160; border: 1px solid #b6effb; }
+        .alert-warning { background-color: #fff3cd; color: #664d03; border: 1px solid #ffecb5; }
+        .alert-error { background-color: #f8d7da; color: #842029; border: 1px solid #f5c2c7; }
+        .alert-success { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; }
+        .status-box { font-size: 12px; margin-top: 10px; color: #666; }
+        #compass { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; z-index: 999; pointer-events: none; opacity: 0.8; }
+    </style>
+</head>
+<body>
+
+    <!-- แถบเมนูด้านข้าง -->
+    <div id="sidebar">
+        <h2>⚙️ การจัดการข้อมูล</h2>
+        <button onclick="window.location.reload()">🔄 รีโหลดข้อมูลใหม่ทั้งหมด</button>
+        <hr>
+        
+        <h3>🏭 กรองประเภทโรงงาน</h3>
+        <div class="form-group">
+            <select id="factoryFilter" onchange="renderFactories()">
+                <option value="all">แสดงทั้งหมด</option>
+                <option value="boiler">หม้อน้ำ (Boiler)</option>
+                <option value="pm25">ฝุ่น (PM2.5)</option>
+                <option value="ammonia">แอมโมเนีย (Ammonia/ห้องเย็น)</option>
+                <option value="silica">ซิลิกา (Silica)</option>
+                <option value="biohazard">เชื้อโรค (Biohazard)</option>
+                <option value="asbestos">แร่ใยหิน (Asbestos)</option>
+                <option value="confined">อับอากาศ (Confined Space)</option>
+                <option value="lead">ตะกั่ว (Lead)</option>
+                <option value="other">ทั่วไป (อื่นๆ)</option>
+            </select>
+        </div>
+        <hr>
+
+        <h3>🎯 ประเมินและนำทาง</h3>
+        <div class="form-group">
+            <label>โหมดการใช้งานแผนที่</label>
+            <select id="mapMode" onchange="updateModeUI()">
+                <option value="normal">🔍 ดูข้อมูลปกติ</option>
+                <option value="click">🖱️ คลิกบนแผนที่</option>
+                <option value="gps">📍 ระบุพิกัด GPS</option>
+            </select>
+        </div>
+        <div id="modeHelp" class="alert alert-info">คลิกที่หมุดบนแผนที่เพื่อดูรายละเอียด</div>
+
+        <div id="gpsInputUI" style="display: none;">
+            <div class="form-group">
+                <input type="text" id="gpsStart" placeholder="จุดเกิดเหตุ (เช่น 18.91, 99.02)">
+            </div>
+            <div class="form-group">
+                <input type="text" id="gpsEnd" placeholder="จุดปลายทาง (เช่น 18.92, 98.99)">
+            </div>
+            <button onclick="calculateGPSRoute()">🚀 คำนวณเส้นทาง</button>
+        </div>
+
+        <button id="btnClearRoute" class="danger" style="display: none;" onclick="clearRoute()">🗑️ ล้างเส้นทาง (เริ่มใหม่)</button>
+        <hr>
+
+        <h3>🌪️ จำลองอุบัติภัยและทิศทางลม</h3>
+        <div class="form-group">
+            <label>ประเภทสารเคมี/อุบัติภัย:</label>
+            <select id="hazardType" onchange="drawRouteAndPlume()">
+                <option value="ค่าเริ่มต้น (ทั่วไป)">ค่าเริ่มต้น (ทั่วไป)</option>
+                <option value="แอมโมเนีย (ก๊าซพิษ)">แอมโมเนีย (ก๊าซพิษ)</option>
+                <option value="ไฟไหม้ / หม้อน้ำระเบิด">ไฟไหม้ / หม้อน้ำระเบิด</option>
+                <option value="ฝุ่นควัน / PM2.5">ฝุ่นควัน / PM2.5</option>
+            </select>
+        </div>
+        <button onclick="fetchWeather()">📡 ดึงข้อมูลลม (Real-time)</button>
+        <div class="form-group">
+            <label>ความเร็วลม (กม./ชม.)</label>
+            <input type="number" id="windSpeed" value="0" min="0" max="200" step="1" onchange="drawRouteAndPlume()">
+        </div>
+        <div class="form-group">
+            <label>ทิศที่ลมพัดไป (องศา 0-360)</label>
+            <input type="number" id="windDir" value="90" min="0" max="360" step="1" onchange="drawRouteAndPlume()">
+        </div>
+
+        <div id="routeResult" style="display: none;">
+            <hr>
+            <h4>🚗 สรุปการเดินทาง</h4>
+            <p id="routeDistDur" style="font-size: 18px; font-weight: bold;"></p>
+            <div id="zoneAlert"></div>
+        </div>
+        
+        <div id="loadingStatus" class="status-box">กำลังโหลดข้อมูลแผนที่...</div>
+    </div>
+
+    <!-- พื้นที่แผนที่ -->
+    <div id="map"></div>
+    <div id="compass">
+        <svg viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="45" fill="rgba(255,255,255,0.85)" stroke="#555" stroke-width="2"/>
+            <path d="M50 50 L60 50 L50 90 L40 50 Z" fill="#cbd5e1"/>
+            <path d="M50 10 L60 50 L40 50 Z" fill="#ef4444"/>
+            <path d="M50 10 L60 50 L50 50 Z" fill="#dc2626"/>
+            <text x="50" y="24" font-family="'Sarabun', sans-serif" font-size="14" font-weight="bold" fill="white" text-anchor="middle">N</text>
+        </svg>
+    </div>
+
+    <!-- โหลด Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <script>
+        // 1. ตัวแปร State
+        let map;
+        let layers = { boundary: null, hospital: null, gas: null, factory: null, route: null, plume: null };
+        let factoriesData = [];
+        let mapClicks = [];
+        let routeData = null;
+
+        // คีย์เวิร์ดสำหรับการกรอง
+        const keywords = {
+            boiler: ['หม้อน้ำ', 'boiler'],
+            pm25: ['ฝุ่น', 'pm2.5', 'ควัน', 'แอสฟัลท์', 'โรงสี'],
+            ammonia: ['แอมโมเนีย', 'น้ำแข็ง', 'ห้องเย็น', 'ammonia'],
+            silica: ['ซิลิกา', 'silica', 'บ่อทราย', 'ท่าทราย', 'ดูดทราย', 'โม่หิน', 'กระจก', 'เซรามิก'],
+            biohazard: ['เชื้อโรค', 'ชีวภาพ', 'ขยะติดเชื้อ', 'โรงพยาบาล', 'คลินิก'],
+            asbestos: ['แร่ใยหิน', 'asbestos', 'กระเบื้อง', 'ฉนวน', 'เบรก'],
+            confined: ['อับอากาศ', 'ไซโล', 'ถังขนาดใหญ่', 'อุโมงค์', 'confined'],
+            lead: ['ตะกั่ว', 'lead', 'แบตเตอรี่', 'หลอม', 'อิเล็กทรอนิกส์']
+        };
+
+        // 2. เริ่มต้นระบบแผนที่
+        function initMap() {
+            map = L.map('map').setView([18.9135, 99.0279], 11);
+            
+            L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                maxZoom: 20,
+                subdomains:['mt0','mt1','mt2','mt3'],
+                attribution: 'Google Maps'
+            }).addTo(map);
+
+            // สร้าง Layer Groups
+            layers.boundary = L.layerGroup().addTo(map);
+            layers.hospital = L.layerGroup().addTo(map);
+            layers.gas = L.layerGroup().addTo(map);
+            layers.factory = L.layerGroup().addTo(map);
+            layers.route = L.layerGroup().addTo(map);
+            layers.plume = L.layerGroup().addTo(map);
+
+            // Control Layers
+            L.control.layers(null, {
+                "🟥 ขอบเขต อ.สันทราย": layers.boundary,
+                "🏥 โรงพยาบาล": layers.hospital,
+                "⛽ ปั๊มน้ำมัน": layers.gas,
+                "📍 โรงงาน": layers.factory
+            }, {collapsed: false}).addTo(map);
+
+            // ดักจับการคลิกแผนที่
+            map.on('click', function(e) {
+                const mode = document.getElementById('mapMode').value;
+                if (mode === 'click') {
+                    if (mapClicks.length >= 2) clearRoute();
+                    mapClicks.push([e.latlng.lat, e.latlng.lng]);
+                    updateModeUI();
+                    
+                    if (mapClicks.length === 1) {
+                        L.marker(mapClicks[0], {icon: L.divIcon({html: "🔥", className: '', iconSize: [24,24]})}).addTo(layers.route);
+                    } else if (mapClicks.length === 2) {
+                        fetchRouting(mapClicks[0], mapClicks[1]);
+                    }
+                }
+            });
+
+            loadAllData();
+        }
+
+        // 3. จัดการ UI เปลี่ยนโหมด
+        function updateModeUI() {
+            const mode = document.getElementById('mapMode').value;
+            const help = document.getElementById('modeHelp');
+            const gpsUI = document.getElementById('gpsInputUI');
+            
+            gpsUI.style.display = mode === 'gps' ? 'block' : 'none';
+            
+            if (mode === 'normal') {
+                help.innerHTML = "💡 <b>สถานะ: ดูข้อมูลปกติ</b><br>คลิกหมุดเพื่อดูข้อมูล ไม่นำไปคำนวณเส้นทาง";
+            } else if (mode === 'click') {
+                let text = "💡 <b>วิธีใช้งาน:</b><br>- คลิก 1 ครั้ง: จุดเกิดเหตุ<br>- คลิก 2 ครั้ง: จุดปลายทาง<br>";
+                if (mapClicks.length > 0) text += `<br>🔥 <b>จุดเกิดเหตุ:</b> ${mapClicks[0][0].toFixed(4)}, ${mapClicks[0][1].toFixed(4)}`;
+                if (mapClicks.length > 1) text += `<br>🏁 <b>จุดปลายทาง:</b> ${mapClicks[1][0].toFixed(4)}, ${mapClicks[1][1].toFixed(4)}`;
+                help.innerHTML = text;
+            }
+            
+            document.getElementById('btnClearRoute').style.display = (mapClicks.length > 0 || routeData) ? 'block' : 'none';
+        }
+
+        function clearRoute() {
+            mapClicks = [];
+            routeData = null;
+            layers.route.clearLayers();
+            layers.plume.clearLayers();
+            document.getElementById('routeResult').style.display = 'none';
+            updateModeUI();
+        }
+
+        // 4. คำนวณ Plume Physics & คณิตศาสตร์
+        function calcStraightDist(lat1, lon1, lat2, lon2) {
+            const R = 6371; 
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        function calculateHazardZones(type, wind, isNight) {
+            const zones = {
+                "แอมโมเนีย (ก๊าซพิษ)": [500, 3000],
+                "ไฟไหม้ / หม้อน้ำระเบิด": [100, 500],
+                "ฝุ่นควัน / PM2.5": [200, 1500],
+                "ค่าเริ่มต้น (ทั่วไป)": [300, 1000]
+            };
+            let [hot_m, warm_m] = zones[type] || [300, 1000];
+            
+            if (isNight && ["แอมโมเนีย (ก๊าซพิษ)", "ฝุ่นควัน / PM2.5"].includes(type)) warm_m *= 1.5;
+
+            let angle, actual_warm;
+            if (wind <= 2) { angle = 360; actual_warm = warm_m; }
+            else if (wind <= 10) { angle = 90; actual_warm = warm_m * 1.2; }
+            else if (wind <= 25) { angle = 60; actual_warm = warm_m * 1.5; }
+            else { angle = 30; actual_warm = warm_m * 2.0; }
+            
+            return { hot: hot_m, warm: actual_warm, angle: angle };
+        }
+
+        function getPlumePolygon(lat, lon, distKm, dirDeg, angleDeg) {
+            if (angleDeg >= 360) return null;
+            const R = 6371.0;
+            const aL = (dirDeg - angleDeg / 2 + 360) % 360;
+            const aR = (dirDeg + angleDeg / 2 + 360) % 360;
+            const latRad = lat * Math.PI / 180;
+            const lonRad = lon * Math.PI / 180;
+            let coords = [[lat, lon]];
+            
+            for (let i = 0; i <= 20; i++) {
+                let ang = aL + ((aR >= aL ? aR - aL : aR + 360 - aL) * (i / 20));
+                let rad = (ang % 360) * Math.PI / 180;
+                let latN = Math.asin(Math.sin(latRad)*Math.cos(distKm/R) + Math.cos(latRad)*Math.sin(distKm/R)*Math.cos(rad));
+                let lonN = lonRad + Math.atan2(Math.sin(rad)*Math.sin(distKm/R)*Math.cos(latRad), Math.cos(distKm/R)-Math.sin(latRad)*Math.sin(latN));
+                coords.push([latN * 180 / Math.PI, lonN * 180 / Math.PI]);
+            }
+            coords.push([lat, lon]);
+            return coords;
+        }
+
+        // 5. วาดเส้นทางและโซนอันตราย
+        function drawRouteAndPlume() {
+            if (!routeData) return;
+            layers.plume.clearLayers();
+            
+            const start = routeData.start;
+            const type = document.getElementById('hazardType').value;
+            const wind = parseFloat(document.getElementById('windSpeed').value) || 0;
+            const dir = parseFloat(document.getElementById('windDir').value) || 90;
+            const isNight = new Date().getHours() < 6 || new Date().getHours() >= 18;
+            
+            const zones = calculateHazardZones(type, wind, isNight);
+            
+            // Cold Zone
+            L.circle(start, {radius: Math.max(5000, zones.warm * 2), color: '#059669', fillColor: '#059669', fillOpacity: 0.05, weight: 1}).addTo(layers.plume);
+            
+            // Warm Zone
+            if (zones.angle < 360) {
+                const poly = getPlumePolygon(start[0], start[1], zones.warm/1000, dir, zones.angle);
+                if (poly) L.polygon(poly, {color: '#d97706', fillColor: '#d97706', fillOpacity: 0.3, weight: 2}).addTo(layers.plume);
+            } else {
+                L.circle(start, {radius: zones.warm, color: '#d97706', fillColor: '#d97706', fillOpacity: 0.3, weight: 2}).addTo(layers.plume);
+            }
+
+            // Hot Zone
+            L.circle(start, {radius: zones.hot, color: '#dc2626', fillColor: '#dc2626', fillOpacity: 0.4, weight: 3}).addTo(layers.plume);
+
+            // อัปเดต UI ผลลัพธ์
+            document.getElementById('routeResult').style.display = 'block';
+            document.getElementById('routeDistDur').innerHTML = `${routeData.dist.toFixed(2)} กม. <span style="font-weight:normal; font-size:14px;">(~${Math.round(routeData.dur)} นาที)</span>`;
+            
+            let alertHtml = `<div class="status-box">ระยะกระจัด: ${routeData.straight.toFixed(2)} กม.</div>`;
+            const distM = routeData.straight * 1000;
+            if (distM <= zones.hot) {
+                alertHtml += `<div class="alert alert-error">🔴 <b>Hot Zone (< ${zones.hot}ม.)</b><br>อันตรายถึงชีวิต ต้องสวม PPE ระดับสูงสุดและอพยพทันที</div>`;
+            } else if (distM <= zones.warm || wind > 2) {
+                alertHtml += `<div class="alert alert-warning">🟡 <b>Warm Zone</b><br>อาจได้รับผลกระทบจากกลุ่มควัน/ก๊าซพิษ เตรียมพร้อมอพยพ</div>`;
+            } else {
+                alertHtml += `<div class="alert alert-success">🟢 <b>Cold Zone</b><br>อยู่นอกรัศมีผลกระทบ เหมาะสำหรับตั้งศูนย์บัญชาการ</div>`;
+            }
+            document.getElementById('zoneAlert').innerHTML = alertHtml;
+        }
+
+        // 6. ดึงข้อมูล API ภายนอก (Fetchers)
+        async function fetchRouting(pt1, pt2) {
+            document.getElementById('loadingStatus').innerText = "กำลังคำนวณเส้นทาง...";
+            try {
+                const url = `https://router.project-osrm.org/route/v1/driving/${pt1[1]},${pt1[0]};${pt2[1]},${pt2[0]}?overview=full&geometries=geojson`;
+                const res = await fetch(url);
+                const data = await res.json();
+                
+                if (data.code === 'Ok') {
+                    const route = data.routes[0];
+                    const coords = route.geometry.coordinates.map(c => [c[1], c[0]]);
+                    routeData = {
+                        start: pt1, end: pt2,
+                        dist: route.distance / 1000,
+                        dur: route.duration / 60,
+                        straight: calcStraightDist(pt1[0], pt1[1], pt2[0], pt2[1]),
+                        coords: coords
+                    };
+                    
+                    layers.route.clearLayers();
+                    L.polyline(coords, {color: '#3388ff', weight: 5}).addTo(layers.route);
+                    L.marker(pt1, {icon: L.divIcon({html: "🔥", className: '', iconSize: [24,24]})}).addTo(layers.route);
+                    L.marker(pt2, {icon: L.divIcon({html: "🏁", className: '', iconSize: [24,24]})}).addTo(layers.route);
+                    map.fitBounds(L.polyline(coords).getBounds());
+                    
+                    drawRouteAndPlume();
+                    document.getElementById('loadingStatus').innerText = "พร้อมใช้งาน";
+                }
+            } catch (e) {
+                alert("ไม่สามารถคำนวณเส้นทางได้");
+            }
+        }
+
+        async function fetchWeather() {
+            if (mapClicks.length === 0) return alert("กรุณาระบุจุดเกิดเหตุก่อนดึงข้อมูลสภาพอากาศ");
+            document.getElementById('loadingStatus').innerText = "กำลังดึงข้อมูลสภาพอากาศ...";
+            try {
+                const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${mapClicks[0][0]}&longitude=${mapClicks[0][1]}&current_weather=true`);
+                const data = await res.json();
+                if (data.current_weather) {
+                    document.getElementById('windSpeed').value = data.current_weather.windspeed;
+                    document.getElementById('windDir').value = data.current_weather.winddirection;
+                    drawRouteAndPlume();
+                    alert(`อัปเดตลมสำเร็จ: ความเร็ว ${data.current_weather.windspeed} กม./ชม. | ทิศทาง ${data.current_weather.winddirection}°`);
+                }
+            } catch (e) { alert("ดึงข้อมูลลมล้มเหลว"); }
+            document.getElementById('loadingStatus').innerText = "พร้อมใช้งาน";
+        }
+
+        // ระบบ Fallback ของ Overpass API
+        async function fetchGasStations() {
+            const query = `[out:json][timeout:25];(node["amenity"="fuel"](18.81,98.95,19.12,99.16);way["amenity"="fuel"](18.81,98.95,19.12,99.16);relation["amenity"="fuel"](18.81,98.95,19.12,99.16););out center;`;
+            const endpoints = [
+                'https://overpass.openstreetmap.fr/api/interpreter',
+                'https://overpass.osm.ch/api/interpreter',
+                'https://overpass-api.de/api/interpreter',
+                'https://lz4.overpass-api.de/api/interpreter'
+            ];
+            for (let url of endpoints) {
+                try {
+                    const res = await fetch(url, { method: 'POST', body: query });
+                    if (res.ok) {
+                        const data = await res.json();
+                        data.elements.forEach(el => {
+                            let lat = el.lat || (el.center && el.center.lat);
+                            let lon = el.lon || (el.center && el.center.lon);
+                            if (lat && lon) {
+                                let name = el.tags?.name || el.tags?.brand || "ปั๊มน้ำมันทั่วไป";
+                                L.marker([lat, lon], {icon: L.divIcon({html: "⛽", className: '', iconSize: [24,24]})})
+                                 .bindPopup(`<b>⛽ ${name}</b>`)
+                                 .addTo(layers.gas);
+                            }
+                        });
+                        return; // หลุดลูปถ้าสำเร็จ
+                    }
+                } catch (e) { continue; }
+            }
+            console.log("Gas API Failed on all endpoints");
+        }
+
+        async function loadAllData() {
+            // 1. โหลดขอบเขต
+            fetch('https://nominatim.openstreetmap.org/search?q=อำเภอสันทราย+จังหวัดเชียงใหม่&format=geojson&polygon_geojson=1&limit=1')
+            .then(r => r.json()).then(data => {
+                if (data.features) {
+                    L.geoJSON(data.features[0], {style: {color: 'red', weight: 4, fillOpacity: 0.04}}).addTo(layers.boundary);
+                }
+            });
+
+            // 2. โหลดโรงพยาบาล (Static)
+            const hospIcon = L.divIcon({html: "🏥", className: '', iconSize: [24,24]});
+            L.marker([18.921246, 98.994203], {icon: hospIcon}).bindPopup("<b>🏥 รพ. สันทราย</b>").addTo(layers.hospital);
+            L.marker([18.852547, 98.968389], {icon: hospIcon}).bindPopup("<b>🏥 รพ. นครพิงค์</b>").addTo(layers.hospital);
+
+            // 3. โหลดปั๊มน้ำมัน
+            await fetchGasStations();
+
+            // 4. โหลดโรงงานจาก Google Sheets CSV
+            const sheetUrl = 'https://docs.google.com/spreadsheets/d/1qHJwpzbaFbn-ayQs4iAHodxAh1Lh5xiUuUHIL5t9v7k/export?format=csv&gid=0';
+            Papa.parse(sheetUrl, {
+                download: true,
+                header: false,
+                complete: function(results) {
+                    factoriesData = results.data;
+                    renderFactories();
+                    document.getElementById('loadingStatus').innerText = "พร้อมใช้งาน";
+                }
+            });
+        }
+
+        // 7. วาดและกรองข้อมูลโรงงาน
+        function renderFactories() {
+            layers.factory.clearLayers();
+            const filter = document.getElementById('factoryFilter').value;
+            
+            factoriesData.forEach(row => {
+                if (!row || row.length < 2) return;
+                let lat = null, lon = null;
+                
+                // หาพิกัดใน Row
+                for (let val of row) {
+                    if (val && val.includes(',')) {
+                        let pts = val.split(',');
+                        if (pts.length === 2 && !isNaN(pts[0]) && !isNaN(pts[1])) {
+                            let tLat = parseFloat(pts[0]), tLon = parseFloat(pts[1]);
+                            if (tLat > 5 && tLat < 21 && tLon > 97 && tLon < 106) {
+                                lat = tLat; lon = tLon; break;
+                            }
+                        }
+                    }
+                }
+
+                if (lat && lon) {
+                    let name = row[1] ? row[1].replace(/"/g, '') : "ไม่มีชื่อ";
+                    let activity = row[4] ? row[4].toLowerCase() : "";
+                    let risk = row[5] ? row[5].toLowerCase() : "";
+                    let searchStr = activity + " " + risk;
+
+                    // การกรอง (Filter)
+                    let show = false;
+                    if (filter === 'all') show = true;
+                    else if (filter === 'other') {
+                        show = !Object.values(keywords).flat().some(kw => searchStr.includes(kw));
+                    } else if (keywords[filter]) {
+                        show = keywords[filter].some(kw => searchStr.includes(kw));
+                    }
+
+                    if (show) {
+                        let color = '#fbbf24'; // เหลือง
+                        if (['แอมโมเนีย', 'ammonia', 'เชื้อโรค', 'biohazard'].some(w => searchStr.includes(w))) color = '#ef4444'; // แดง
+                        else if (['หม้อน้ำ', 'boiler', 'อับอากาศ', 'ตะกั่ว'].some(w => searchStr.includes(w))) color = '#f97316'; // ส้ม
+
+                        L.circleMarker([lat, lon], {radius: 6, color: 'white', weight: 1, fillColor: color, fillOpacity: 0.9})
+                         .bindPopup(`<b>🏭 ${name}</b><br><small><b>กิจกรรม:</b> ${row[4] || '-'}</small><br><small><b>ความเสี่ยง:</b> ${row[5] || '-'}</small>`)
+                         .addTo(layers.factory);
+                    }
+                }
+            });
+        }
+
+        function calculateGPSRoute() {
+            const startTxt = document.getElementById('gpsStart').value;
+            const endTxt = document.getElementById('gpsEnd').value;
+            const parse = (txt) => {
+                const nums = txt.match(/-?\d+(\.\d+)?/g);
+                if (nums && nums.length >= 2) return [parseFloat(nums[0]), parseFloat(nums[1])];
+                return null;
+            };
+            const p1 = parse(startTxt), p2 = parse(endTxt);
+            if (p1 && p2) {
+                mapClicks = [p1, p2];
+                fetchRouting(p1, p2);
+                updateModeUI();
+            } else { alert("รูปแบบพิกัดไม่ถูกต้อง"); }
+        }
+
+        // โหลดเมื่อหน้าเว็บพร้อม
+        window.onload = initMap;
+    </script>
+</body>
+</html>
