@@ -28,9 +28,49 @@
         .alert-success { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; }
         .status-box { font-size: 12px; margin-top: 10px; color: #666; }
         #compass { position: fixed; bottom: 30px; right: 30px; width: 60px; height: 60px; z-index: 999; pointer-events: none; opacity: 0.8; }
+        /* สไตล์สำหรับปุ่ม Workspace มุมขวาบน */
+        .workspace-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000; /* ให้อยู่บนสุดเหนือแผนที่ */
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background-color: #f8fbff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            color: #475569;
+            text-decoration: none;
+            font-size: 15px;
+            font-weight: 500;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.2s ease;
+        }
+        .workspace-btn:hover {
+            background-color: #f1f5f9;
+            color: #0f172a;
+        }
+        .workspace-btn svg {
+            width: 18px;
+            height: 18px;
+            stroke: #475569;
+        }
+        .workspace-btn:hover svg {
+            stroke: #0f172a;
+        }
     </style>
 </head>
 <body>
+    <!-- ปุ่ม Workspace มุมขวาบน -->
+    <a href="https://praetinee.github.io/JanWorkspace/" class="workspace-btn">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+        </svg>
+        Workspace
+    </a>
 
     <!-- แถบเมนูด้านข้าง -->
     <div id="sidebar">
