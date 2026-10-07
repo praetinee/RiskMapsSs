@@ -380,8 +380,16 @@
                             let lon = el.lon || (el.center && el.center.lon);
                             if (lat && lon) {
                                 let name = el.tags?.name || el.tags?.brand || "ปั๊มน้ำมันทั่วไป";
+                                let popupHtml = `
+                                    <div style="min-width: 180px;">
+                                        <b>⛽ ${name}</b><br>
+                                        <hr style="margin: 8px 0;">
+                                        <button style="padding: 5px; font-size: 12px; margin-bottom: 5px; background-color: #dc2626;" onclick="setPointFromPopup(${lat}, ${lon}, 'start')">🚩 ตั้งเป็นจุดเกิดเหตุ</button>
+                                        <button style="padding: 5px; font-size: 12px; margin-bottom: 0; background-color: #059669;" onclick="setPointFromPopup(${lat}, ${lon}, 'end')">🏁 ตั้งเป็นจุดปลายทาง</button>
+                                    </div>
+                                `;
                                 L.marker([lat, lon], {icon: L.divIcon({html: "⛽", className: '', iconSize: [24,24]})})
-                                 .bindPopup(`<b>⛽ ${name}</b>`)
+                                 .bindPopup(popupHtml)
                                  .addTo(layers.gas);
                             }
                         });
@@ -403,8 +411,22 @@
 
             // 2. โหลดโรงพยาบาล (Static)
             const hospIcon = L.divIcon({html: "🏥", className: '', iconSize: [24,24]});
-            L.marker([18.921246, 98.994203], {icon: hospIcon}).bindPopup("<b>🏥 รพ. สันทราย</b>").addTo(layers.hospital);
-            L.marker([18.852547, 98.968389], {icon: hospIcon}).bindPopup("<b>🏥 รพ. นครพิงค์</b>").addTo(layers.hospital);
+            const hospitals = [
+                {name: "รพ. สันทราย", lat: 18.921246, lon: 98.994203},
+                {name: "รพ. นครพิงค์", lat: 18.852547, lon: 98.968389}
+            ];
+            
+            hospitals.forEach(h => {
+                let popupHtml = `
+                    <div style="min-width: 180px;">
+                        <b>🏥 ${h.name}</b><br>
+                        <hr style="margin: 8px 0;">
+                        <button style="padding: 5px; font-size: 12px; margin-bottom: 5px; background-color: #dc2626;" onclick="setPointFromPopup(${h.lat}, ${h.lon}, 'start')">🚩 ตั้งเป็นจุดเกิดเหตุ</button>
+                        <button style="padding: 5px; font-size: 12px; margin-bottom: 0; background-color: #059669;" onclick="setPointFromPopup(${h.lat}, ${h.lon}, 'end')">🏁 ตั้งเป็นจุดปลายทาง</button>
+                    </div>
+                `;
+                L.marker([h.lat, h.lon], {icon: hospIcon}).bindPopup(popupHtml).addTo(layers.hospital);
+            });
 
             // 3. โหลดปั๊มน้ำมัน
             await fetchGasStations();
