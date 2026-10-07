@@ -460,12 +460,24 @@
                     }
 
                     if (show) {
-                        let color = '#fbbf24'; // เหลือง
-                        if (['แอมโมเนีย', 'ammonia', 'เชื้อโรค', 'biohazard'].some(w => searchStr.includes(w))) color = '#ef4444'; // แดง
-                        else if (['หม้อน้ำ', 'boiler', 'อับอากาศ', 'ตะกั่ว'].some(w => searchStr.includes(w))) color = '#f97316'; // ส้ม
+                        let color = '#fbbf24'; 
+                        if (['แอมโมเนีย', 'ammonia', 'เชื้อโรค', 'biohazard'].some(w => searchStr.includes(w))) color = '#ef4444'; 
+                        else if (['หม้อน้ำ', 'boiler', 'อับอากาศ', 'ตะกั่ว'].some(w => searchStr.includes(w))) color = '#f97316'; 
+
+                        // ชุดโค้ดที่แทรกใหม่: สร้าง Popup ที่มีปุ่มฝังอยู่
+                        let popupHtml = `
+                            <div style="min-width: 180px;">
+                                <b>🏭 ${name}</b><br>
+                                <small><b>กิจกรรม:</b> ${row[4] || '-'}</small><br>
+                                <small><b>ความเสี่ยง:</b> ${row[5] || '-'}</small><br>
+                                <hr style="margin: 8px 0;">
+                                <button style="padding: 5px; font-size: 12px; margin-bottom: 5px; background-color: #dc2626;" onclick="setPointFromPopup(${lat}, ${lon}, 'start')">🚩 ตั้งเป็นจุดเกิดเหตุ</button>
+                                <button style="padding: 5px; font-size: 12px; margin-bottom: 0; background-color: #059669;" onclick="setPointFromPopup(${lat}, ${lon}, 'end')">🏁 ตั้งเป็นจุดปลายทาง</button>
+                            </div>
+                        `;
 
                         L.circleMarker([lat, lon], {radius: 6, color: 'white', weight: 1, fillColor: color, fillOpacity: 0.9})
-                         .bindPopup(`<b>🏭 ${name}</b><br><small><b>กิจกรรม:</b> ${row[4] || '-'}</small><br><small><b>ความเสี่ยง:</b> ${row[5] || '-'}</small>`)
+                         .bindPopup(popupHtml)
                          .addTo(layers.factory);
                     }
                 }
@@ -486,6 +498,31 @@
                 fetchRouting(p1, p2);
                 updateModeUI();
             } else { alert("รูปแบบพิกัดไม่ถูกต้อง"); }
+        }
+        // ชุดโค้ดที่แทรกใหม่: ฟังก์ชันจัดการเมื่อปุ่มใน Popup ถูกคลิก
+        function setPointFromPopup(lat, lon, type) {
+            document.getElementById('mapMode').value = 'click'; // ปรับ UI ให้ตรงกับโหมดคลิกแผนที่
+            
+            if (type === 'start') {
+                mapClicks[0] = [lat, lon];
+                if (mapClicks.length > 2) mapClicks = mapClicks.slice(0, 2);
+            } else if (type === 'end') {
+                if (mapClicks.length === 0) {
+                    alert('กรุณาระบุ "จุดเกิดเหตุ" ก่อนเลือกจุดปลายทางครับ');
+                    return;
+                }
+                mapClicks[1] = [lat, lon];
+            }
+            
+            updateModeUI();
+            map.closePopup(); 
+            
+            if (mapClicks.length === 1) {
+                layers.route.clearLayers();
+                L.marker(mapClicks[0], {icon: L.divIcon({html: "🔥", className: '', iconSize: [24,24]})}).addTo(layers.route);
+            } else if (mapClicks.length >= 2) {
+                fetchRouting(mapClicks[0], mapClicks[1]);
+            }
         }
 
         // โหลดเมื่อหน้าเว็บพร้อม
